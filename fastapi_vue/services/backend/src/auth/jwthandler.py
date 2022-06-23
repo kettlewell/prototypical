@@ -1,4 +1,11 @@
 import os
+import logging
+from src.loggingservice import EchoService
+
+logging.config.fileConfig("logging.conf", disable_existing_loggers=False)
+logger = logging.getLogger(__name__)
+
+
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -33,8 +40,15 @@ class OAuth2PasswordBearerCookie(OAuth2):
         super().__init__(flows=flows, scheme_name=scheme_name, auto_error=auto_error)
 
     async def __call__(self, request: Request) -> Optional[str]:
+        logger.info("__call__")
+
         authorization: str = request.cookies.get("Authorization")
+        logger.info(f"request.cookies={request.cookies}")
+
+        logger.info(f"authorization={authorization}")
+
         scheme, param = get_authorization_scheme_param(authorization)
+        logger.info(f"scheme={scheme} and param={param}")
 
         if not authorization or scheme.lower() != "bearer":
             if self.auto_error:
@@ -55,6 +69,8 @@ security = OAuth2PasswordBearerCookie(token_url="/login")
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
 
+    logger.info("Create_access_token")
+
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
@@ -73,9 +89,15 @@ async def get_current_user(token: str = Depends(security)):
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    logger.info(f"token={token}")
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        logger.info(f"payload={payload}")
+
         username: str = payload.get("sub")
+        logger.info(f"username={username}")
+
         if username is None:
             raise credentials_exception
         token_data = TokenData(username=username)

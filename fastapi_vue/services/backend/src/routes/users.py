@@ -1,73 +1,92 @@
-from typing import List
+import logging
+from src.loggingservice import EchoService
 
-from fastapi import APIRouter, Depends, HTTPException
+logging.config.fileConfig("logging.conf", disable_existing_loggers=False)
+logger = logging.getLogger(__name__)
+
+from datetime import timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordRequestForm
+
 from tortoise.contrib.fastapi import HTTPNotFoundError
-from tortoise.exceptions import DoesNotExist
 
-import src.crud.notes as crud
-from src.auth.jwthandler import get_current_user
-from src.schemas.notes import NoteOutSchema, NoteInSchema, UpdateNote
+import src.crud.users as crud
+from src.auth.users import validate_user
 from src.schemas.token import Status
-from src.schemas.users import UserOutSchema
+from src.schemas.users import UserInSchema, UserOutSchema
+
+from src.auth.jwthandler import (
+    create_access_token,
+    get_current_user,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+)
 
 
 router = APIRouter()
 
 
-@router.get(
-    "/notes",
-    response_model=List[NoteOutSchema],
-    dependencies=[Depends(get_current_user)],
-)
-async def get_notes():
-    return await crud.get_notes()
+@router.post("/register", response_model=UserOutSchema)
+async def create_user(user: UserInSchema) -> UserOutSchema:
+    return await crud.create_user(user)
 
 
-@router.get(
-    "/note/{note_id}",
-    response_model=NoteOutSchema,
-    dependencies=[Depends(get_current_user)],
-)
-async def get_note(note_id: int) -> NoteOutSchema:
-    try:
-        return await crud.get_note(note_id)
-    except DoesNotExist:
+@router.post("/login")
+async def login(user: OAuth2PasswordRequestForm = Depends()):
+
+    user = await validate_user(user)
+
+    if not user:
         raise HTTPException(
-            status_code=404,
-            detail="Note does not exist",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
+    logger.info("exception not raised...")
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    logger.info(f"access_token_expires={access_token_expires}")
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    logger.info(f"access_token={access_token}")
+    token = jsonable_encoder(access_token)
+    logger.info(f"token={token}")
+    content = {"message": "You've successfully logged in. Welcome back!"}
+    logger.info(f"content={content}")
+    response = JSONResponse(content=content)
+    logger.info(f"response={response}")
+    response.set_cookie(
+        "Authorization",
+        value=f"Bearer {token}",
+        httponly=True,
+        max_age=1800,
+        expires=1800,
+        samesite="Lax",
+        secure=False,
+    )
+    logger.info(f"response.get_cookie={response.set_cookie}")
+    return response
 
 
-@router.post(
-    "/notes", response_model=NoteOutSchema, dependencies=[Depends(get_current_user)]
-)
-async def create_note(
-    note: NoteInSchema, current_user: UserOutSchema = Depends(get_current_user)
-) -> NoteOutSchema:
-    return await crud.create_note(note, current_user)
-
-
-@router.patch(
-    "/note/{note_id}",
+@router.get(
+    "/users/whoami",
+    response_model=UserOutSchema,
     dependencies=[Depends(get_current_user)],
-    response_model=NoteOutSchema,
-    responses={404: {"model": HTTPNotFoundError}},
 )
-async def update_note(
-    note_id: int,
-    note: UpdateNote,
-    current_user: UserOutSchema = Depends(get_current_user),
-) -> NoteOutSchema:
-    return await crud.update_note(note_id, note, current_user)
+async def read_users_me(current_user: UserOutSchema = Depends(get_current_user)):
+    return current_user
 
 
 @router.delete(
-    "/note/{note_id}",
+    "/user/{user_id}",
     response_model=Status,
     responses={404: {"model": HTTPNotFoundError}},
     dependencies=[Depends(get_current_user)],
 )
-async def delete_note(
-    note_id: int, current_user: UserOutSchema = Depends(get_current_user)
-):
-    return await crud.delete_note(note_id, current_user)
+async def delete_user(
+    user_id: int, current_user: UserOutSchema = Depends(get_current_user)
+) -> Status:
+    return await crud.delete_user(user_id, current_user)
