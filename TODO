@@ -1,3 +1,24 @@
-# fastapi-view
+# fastapi_vue
+
 * create wrapper scripts to start, stop, clean, etc
- 
+
+
+# tiangolo-fastapi-vue
+
+* cleanup build scripts 
+* README cleanup
+* improve testing
+* create deploy scripts to local production domains
+* secrets management for production
+* homepage with links to all the services:
+  * localhost:80 (home)
+  * localhost:5555 ( flower )
+  * etc
+## backend
+* update to python 3.10
+* use nginx instead of traefik, including lets encrypt w/certbot
+* configure sqlite3
+
+## frontend
+
+* update to vue3 latest

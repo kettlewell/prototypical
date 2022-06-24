@@ -1,10 +1,5 @@
-version: "3.3"
 services:
-
   proxy:
-    ports:
-      - "80:80"
-      - "8090:8080"
     command:
       # Enable Docker in Traefik, so that it reads labels from Docker services
       - --providers.docker
@@ -27,30 +22,32 @@ services:
       - traefik.enable=true
       - traefik.http.routers.${STACK_NAME?Variable not set}-traefik-public-http.rule=Host(`${DOMAIN?Variable not set}`)
       - traefik.http.services.${STACK_NAME?Variable not set}-traefik-public.loadbalancer.server.port=80
+  db:
+    env_file:
+      - .env-common
+      - .env-dev
 
   pgadmin:
-    ports:
-      - "5050:5050"
+    env_file:
+      - .env-common
+      - .env-dev
 
   flower:
-    ports:
-      - "5555:5555"
+    env_file:
+      - .env-common
+      - .env-dev
 
   backend:
-    ports:
-      - "8888:8888"
-    volumes:
-      - ./backend/app:/app
+    env_file:
+      - .env-common
+      - .env-dev
     environment:
-      - JUPYTER=jupyter lab --ip=0.0.0.0 --allow-root --NotebookApp.custom_display_url=http://127.0.0.1:8888
       - SERVER_HOST=http://${DOMAIN?Variable not set}
     build:
       context: ./backend
       dockerfile: backend.dockerfile
       args:
         INSTALL_DEV: ${INSTALL_DEV-true}
-        INSTALL_JUPYTER: ${INSTALL_JUPYTER-true}
-    # command: bash -c "while true; do sleep 1; done"  # Infinite loop to keep container live doing nothing
     command: /start-reload.sh
     labels:
       - traefik.enable=true
@@ -59,24 +56,26 @@ services:
       - traefik.http.services.${STACK_NAME?Variable not set}-backend.loadbalancer.server.port=80
 
   celeryworker:
-    volumes:
-      - ./backend/app:/app
+    env_file:
+      - .env-common
+      - .env-dev
     environment:
-      - RUN=celery worker -A app.worker -l info -Q main-queue -c 1
-      - JUPYTER=jupyter lab --ip=0.0.0.0 --allow-root --NotebookApp.custom_display_url=http://127.0.0.1:8888
+      - RUN=celery -A app.worker worker -l info -Q main-queue -c 1
       - SERVER_HOST=http://${DOMAIN?Variable not set}
     build:
       context: ./backend
       dockerfile: celeryworker.dockerfile
       args:
         INSTALL_DEV: ${INSTALL_DEV-true}
-        INSTALL_JUPYTER: ${INSTALL_JUPYTER-true}
 
   frontend:
     build:
       context: ./frontend
       args:
         FRONTEND_ENV: dev
+    env_file:
+      - .env-common
+      - .env-dev
     labels:
       - traefik.enable=true
       - traefik.constraint-label-stack=${TRAEFIK_TAG?Variable not set}
